@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trazador de Lotes · CRM Inmobiliario · Cali</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<style>
+  :root{
+    --bg:#0f1720; --panel:#16212e; --panel2:#1d2b3a; --border:#2a3a4d;
+    --text:#e7eef6; --muted:#93a4b8; --accent:#2f9e6e; --accent2:#3aa0ff;
+    --wa:#25d366; --danger:#e5534b; --warn:#e0a83b; --radius:12px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text)}
+  button{font-family:inherit;cursor:pointer}
+  input,textarea,select{font-family:inherit}
+  .app{display:grid;grid-template-columns:340px 1fr;grid-template-rows:56px 1fr;height:100vh;overflow:hidden}
+  header{grid-column:1/3;display:flex;align-items:center;gap:12px;padding:0 16px;background:var(--panel);border-bottom:1px solid var(--border)}
+  header h1{font-size:16px;margin:0;font-weight:650;letter-spacing:.2px}
+  header .brand{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:16px}
+  header .sp{flex:1}
+  header .stat{font-size:12px;color:var(--muted)}
+  /* sidebar */
+  .sidebar{grid-row:2;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+  .side-actions{padding:12px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
+  .btn{border:1px solid var(--border);background:var(--panel2);color:var(--text);padding:9px 12px;border-radius:10px;font-size:13px;font-weight:550;display:inline-flex;align-items:center;justify-content:center;gap:8px;transition:.15s}
+  .btn:hover{border-color:var(--accent2)}
+  .btn.primary{background:var(--accent);border-color:transparent;color:#fff}
+  .btn.primary:hover{filter:brightness(1.08)}
+  .btn.wa{background:var(--wa);border-color:transparent;color:#04361b}
+  .btn.ghost{background:transparent}
+  .btn.danger{background:transparent;border-color:var(--danger);color:var(--danger)}
+  .btn.sm{padding:6px 9px;font-size:12px;border-radius:8px}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .search{padding:0 12px 8px}
+  .search input{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:9px;font-size:13px}
+  .list{overflow-y:auto;flex:1;padding:6px 8px 24px}
+  .list .empty{color:var(--muted);font-size:13px;text-align:center;padding:30px 16px;line-height:1.5}
+  .card{display:flex;gap:10px;padding:9px;border-radius:10px;border:1px solid transparent;cursor:pointer;transition:.12s}
+  .card:hover{background:var(--panel2)}
+  .card.active{background:var(--panel2);border-color:var(--accent)}
+  .card .thumb{width:52px;height:52px;border-radius:8px;object-fit:cover;background:var(--bg);flex:none;border:1px solid var(--border)}
+  .card .meta{min-width:0;flex:1}
+  .card .t{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .card .s{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .card .tags{display:flex;gap:5px;margin-top:4px}
+  .tag{font-size:10px;padding:1px 6px;border-radius:20px;background:var(--bg);border:1px solid var(--border);color:var(--muted)}
+  /* main */
+  .main{grid-row:2;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:16px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:1100px){.grid2{grid-template-columns:1fr}}
+  .box{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+  .box>.hd{padding:11px 14px;border-bottom:1px solid var(--border);font-size:13px;font-weight:650;display:flex;align-items:center;gap:8px;justify-content:space-between}
+  .box>.hd .l{display:flex;align-items:center;gap:8px}
+  .box>.bd{padding:14px}
+  .muted{color:var(--muted)}
+  #map{height:380px;width:100%;background:#0a0f15}
+  .leaflet-container{background:#0a0f15}
+  .drop{border:2px dashed var(--border);border-radius:12px;padding:26px;text-align:center;color:var(--muted);transition:.15s;cursor:pointer}
+  .drop:hover,.drop.drag{border-color:var(--accent);color:var(--text);background:var(--panel2)}
+  .drop b{color:var(--text)}
+  .photo-wrap{position:relative}
+  .photo-wrap img{width:100%;border-radius:10px;display:block;max-height:340px;object-fit:contain;background:#0a0f15}
+  .field{margin-bottom:11px}
+  .field label{display:block;font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:4px}
+  .field input,.field textarea,.field select{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:9px;font-size:13.5px}
+  .field textarea{resize:vertical;min-height:60px}
+  .row{display:flex;gap:10px}
+  .row>*{flex:1}
+  .kv{display:grid;grid-template-columns:120px 1fr;gap:4px 10px;font-size:13px}
+  .kv .k{color:var(--muted)}
+  .kv .v{font-weight:550;word-break:break-word}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:4px 10px;border-radius:20px;background:var(--panel2);border:1px solid var(--border)}
+  .pill.ok{border-color:var(--accent);color:#7fe0b5}
+  .pill.no{border-color:var(--warn);color:var(--warn)}
+  .selected-lot{background:var(--panel2);border:1px solid var(--accent);border-radius:10px;padding:12px;font-size:13px}
+  .selected-lot .npn{font-family:ui-monospace,monospace;font-size:12px;color:#7fe0b5;word-break:break-all}
+  /* CRM */
+  .comm{border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:9px;background:var(--bg)}
+  .comm .top{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+  .comm .type{font-size:11px;padding:2px 8px;border-radius:20px;font-weight:600}
+  .comm .type.llamada{background:#22384d;color:#7cc3ff}
+  .comm .type.whatsapp{background:#123a24;color:#5ee0a0}
+  .comm .type.visita{background:#3a2e12;color:#e0c05e}
+  .comm .type.correo{background:#2e2247;color:#c79ff0}
+  .comm .type.nota{background:#2a3a4d;color:#a8bdd6}
+  .comm .date{font-size:11.5px;color:var(--muted);margin-left:auto}
+  .comm .txt{font-size:13px;line-height:1.45;white-space:pre-wrap}
+  .doc{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:9px;margin-bottom:7px;background:var(--bg)}
+  .doc .ic{width:34px;height:34px;border-radius:7px;background:var(--panel2);display:flex;align-items:center;justify-content:center;font-size:16px;flex:none}
+  .doc .info{min-width:0;flex:1}
+  .doc .info .n{font-size:13px;font-weight:550;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .doc .info .m{font-size:11px;color:var(--muted)}
+  .welcome{color:var(--muted);text-align:center;padding:40px;line-height:1.6}
+  .welcome h2{color:var(--text);font-weight:650}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--accent);color:var(--text);padding:11px 18px;border-radius:10px;font-size:13px;box-shadow:0 8px 30px rgba(0,0,0,.5);z-index:9999;opacity:0;transition:.25s;pointer-events:none}
+  .toast.show{opacity:1}
+  .spin{width:15px;height:15px;border:2px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite;display:inline-block}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .hidden{display:none!important}
+  .hint{font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.4}
+  .leaflet-popup-content-wrapper{background:var(--panel2);color:var(--text)}
+  .leaflet-popup-tip{background:var(--panel2)}
+  a{color:var(--accent2)}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand">📍</div>
+    <h1>Trazador de Lotes <span class="muted" style="font-weight:400">· CRM · Catastro Cali</span></h1>
+    <div class="sp"></div>
+    <div class="stat" id="statCount">0 lotes guardados</div>
+    <button class="btn sm ghost" id="btnExport" title="Exportar copia de seguridad">⬇ Backup</button>
+    <button class="btn sm ghost" id="btnImport" title="Importar copia de seguridad">⬆ Restaurar</button>
+    <input type="file" id="importFile" accept="application/json" class="hidden">
+  </header>
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="side-actions">
+      <button class="btn primary" id="btnNew">＋ Nuevo lote desde foto</button>
+    </div>
+    <div class="search"><input id="q" placeholder="Buscar por dirección, NPN, dueño…"></div>
+    <div class="list" id="list"></div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main" id="main">
+    <div class="welcome" id="welcome">
+      <h2>Bienvenido 👋</h2>
+      <p>Sube una foto de una propiedad. La app leerá sus coordenadas GPS,<br>
+      te mostrará los lotes del catastro de Cali en planta para seleccionar cuál es,<br>
+      y guardará el lote con su ficha, comunicaciones (CRM), documentos y WhatsApp.</p>
+      <button class="btn primary" onclick="document.getElementById('btnNew').click()">＋ Empezar con una foto</button>
+    </div>
+
+    <div id="editor" class="hidden">
+      <!-- FOTO + MAPA -->
+      <div class="grid2">
+        <div class="box">
+          <div class="hd"><div class="l">🖼️ Foto de la propiedad</div>
+            <button class="btn sm ghost" id="btnOcr" title="Leer número visible en la foto (OCR)">🔎 Leer número</button>
+          </div>
+          <div class="bd">
+            <div id="drop" class="drop">
+              <div style="font-size:26px">📷</div>
+              <b>Arrastra una foto aquí</b> o haz clic para seleccionar<br>
+              <span class="hint">Se leerán coordenadas GPS, fecha y número de imagen del archivo (EXIF).</span>
+            </div>
+            <input type="file" id="photoInput" accept="image/*" class="hidden">
+            <div id="photoView" class="photo-wrap hidden"></div>
+            <div style="margin-top:12px" class="row">
+              <div class="field" style="margin:0"><label>N.º de imagen</label><input id="fNum" placeholder="auto"></div>
+              <div class="field" style="margin:0"><label>Fecha de la foto</label><input id="fDate" placeholder="—"></div>
+            </div>
+            <div id="gpsStatus" style="margin-top:10px"></div>
+            <div class="row" style="margin-top:8px">
+              <div class="field" style="margin:0"><label>Latitud</label><input id="fLat" placeholder="—"></div>
+              <div class="field" style="margin:0"><label>Longitud</label><input id="fLon" placeholder="—"></div>
+            </div>
+            <button class="btn sm" id="btnLocate" style="margin-top:8px">🗺️ Ubicar en el mapa y buscar lotes</button>
+          </div>
+        </div>
+
+        <div class="box">
+          <div class="hd"><div class="l">🗺️ Lotes del catastro (planta)</div>
+            <button class="btn sm ghost" id="btnRefetch">↻ Buscar aquí</button>
+          </div>
+          <div id="map"></div>
+          <div class="bd">
+            <div class="muted" style="font-size:12.5px" id="lotHint">Haz clic en un lote del mapa para seleccionarlo como el lote de esta propiedad.</div>
+            <div id="selectedLot" class="selected-lot hidden" style="margin-top:10px"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- DUEÑO / CONTACTO -->
+      <div class="box">
+        <div class="hd"><div class="l">👤 Dueño / Contacto</div></div>
+        <div class="bd">
+          <div class="row">
+            <div class="field"><label>Nombre del dueño</label><input id="dNombre" placeholder="Nombre completo"></div>
+            <div class="field"><label>Correo</label><input id="dCorreo" placeholder="correo@ejemplo.com"></div>
+          </div>
+          <div class="row" style="align-items:flex-end">
+            <div class="field" style="margin:0"><label>Teléfono / WhatsApp</label><input id="dTel" placeholder="Ej: 3001234567"></div>
+            <button class="btn wa" id="btnWa" style="flex:none;white-space:nowrap">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17.5 14.4c-.3-.2-1.7-.8-2-.9-.3-.1-.5-.2-.7.2s-.8.9-1 1.1c-.2.2-.4.2-.7.1-1.7-.9-2.9-1.6-4-3.6-.3-.5.3-.5.8-1.5.1-.2 0-.4 0-.5s-.7-1.6-.9-2.2c-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.5.1-.8.4-.3.3-1 1-1 2.5s1.1 2.9 1.2 3.1c.2.2 2.2 3.3 5.3 4.7.7.3 1.3.5 1.7.6.7.2 1.4.2 1.9.1.6-.1 1.7-.7 1.9-1.4.2-.7.2-1.2.2-1.4-.1-.1-.3-.2-.6-.4M12 2a10 10 0 0 0-8.6 15l-1.3 4.8 4.9-1.3A10 10 0 1 0 12 2m0 18.2c-1.5 0-3-.4-4.3-1.2l-.3-.2-2.9.8.8-2.8-.2-.3A8.2 8.2 0 1 1 12 20.2"/></svg>
+              WhatsApp
+            </button>
+          </div>
+          <div class="hint" id="waHint"></div>
+          <div class="field" style="margin-top:6px"><label>Notas del dueño</label><textarea id="dNotas" placeholder="Datos generales, referencias, estado de la negociación…"></textarea></div>
+        </div>
+      </div>
+
+      <div class="grid2">
+        <!-- CRM COMUNICACIONES -->
+        <div class="box">
+          <div class="hd"><div class="l">💬 Comunicaciones (CRM)</div><span class="muted" id="commCount"></span></div>
+          <div class="bd">
+            <div class="row">
+              <div class="field" style="flex:0 0 130px"><label>Tipo</label>
+                <select id="cType">
+                  <option value="llamada">📞 Llamada</option>
+                  <option value="whatsapp">💚 WhatsApp</option>
+                  <option value="visita">🏠 Visita</option>
+                  <option value="correo">✉️ Correo</option>
+                  <option value="nota">📝 Nota</option>
+                </select>
+              </div>
+              <div class="field"><label>Fecha</label><input type="datetime-local" id="cDate"></div>
+            </div>
+            <div class="field"><label>Detalle de la comunicación</label><textarea id="cText" placeholder="Ej: Llamé al dueño, pide $X, quedamos en enviar propuesta…"></textarea></div>
+            <button class="btn primary sm" id="btnAddComm">＋ Registrar comunicación</button>
+            <div id="commList" style="margin-top:12px"></div>
+          </div>
+        </div>
+
+        <!-- DOCUMENTOS -->
+        <div class="box">
+          <div class="hd"><div class="l">📄 Documentos</div><span class="muted" id="docCount"></span></div>
+          <div class="bd">
+            <div class="field"><label>Categoría</label>
+              <select id="docCat">
+                <option>Predial</option>
+                <option>Certificado de tradición</option>
+                <option>Escritura</option>
+                <option>Cédula del dueño</option>
+                <option>Avalúo</option>
+                <option>Contrato</option>
+                <option>Otro</option>
+              </select>
+            </div>
+            <div id="docDrop" class="drop" style="padding:16px">
+              <div style="font-size:20px">📎</div>
+              <b>Subir documento</b><br><span class="hint">PDF, imágenes u otros archivos. Ej: recibo de predial.</span>
+            </div>
+            <input type="file" id="docInput" multiple class="hidden">
+            <div id="docList" style="margin-top:12px"></div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px;padding-bottom:20px">
+        <button class="btn primary" id="btnSave" style="flex:1">💾 Guardar lote</button>
+        <button class="btn danger" id="btnDelete">🗑️ Eliminar</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="https://cdn.jsdelivr.net/npm/exifr@7.1.3/dist/full.umd.js"></script>
+<script>
+/* ============================================================
+   CONFIG — Catastro de Cali (IDESC GeoServer, CORS habilitado)
+   ============================================================ */
+const CALI = {
+  ows:  'https://ws-idesc.cali.gov.co/geoserver/catastro/ows',
+  wms:  'https://ws-idesc.cali.gov.co/geoserver/catastro/wms',
+  lotes:'catastro:cat_bas_terrenos',      // lotes / terrenos
+  manzanas:'catastro:cat_bas_manzanas',
+  center:[3.4516,-76.5320],               // Cali
+};
+
+/* ============================================================
+   IndexedDB
+   ============================================================ */
+const DB={_p:null};
+function db(){
+  if(DB._p) return DB._p;
+  DB._p=new Promise((res,rej)=>{
+    const r=indexedDB.open('trazador_lotes',1);
+    r.onupgradeneeded=e=>{const d=e.target.result; if(!d.objectStoreNames.contains('lotes')) d.createObjectStore('lotes',{keyPath:'id'});};
+    r.onsuccess=e=>res(e.target.result);
+    r.onerror=e=>rej(e.target.error);
+  });
+  return DB._p;
+}
+async function dbAll(){const d=await db();return new Promise((res,rej)=>{const t=d.transaction('lotes').objectStore('lotes').getAll();t.onsuccess=()=>res(t.result||[]);t.onerror=()=>rej(t.error);});}
+async function dbPut(o){const d=await db();return new Promise((res,rej)=>{const t=d.transaction('lotes','readwrite').objectStore('lotes').put(o);t.onsuccess=()=>res();t.onerror=()=>rej(t.error);});}
+async function dbDel(id){const d=await db();return new Promise((res,rej)=>{const t=d.transaction('lotes','readwrite').objectStore('lotes').delete(id);t.onsuccess=()=>res();t.onerror=()=>rej(t.error);});}
+
+/* ============================================================
+   Estado
+   ============================================================ */
+let lotes=[];              // todos los registros
+let current=null;         // registro en edición
+let map,markerLayer,wfsLayer,wmsLayer,selectedGeoLayer,ownMarker;
+const $=id=>document.getElementById(id);
+
+/* ============================================================
+   Utilidades
+   ============================================================ */
+function uid(){return 'l'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
+function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2600);}
+function fmtBytes(b){if(!b)return '';const u=['B','KB','MB','GB'];let i=0;while(b>=1024&&i<u.length-1){b/=1024;i++;}return b.toFixed(b<10&&i>0?1:0)+' '+u[i];}
+function fileToBlobRecord(file){return new Promise(res=>{const r=new FileReader();r.onload=()=>res({name:file.name,type:file.type,size:file.size,data:r.result});r.readAsArrayBuffer(file);});}
+function recToURL(rec){if(!rec||!rec.data)return null;return URL.createObjectURL(new Blob([rec.data],{type:rec.type||'application/octet-stream'}));}
+function docIcon(t){t=(t||'').toLowerCase();if(t.includes('pdf'))return '📕';if(t.includes('image'))return '🖼️';if(t.includes('word')||t.includes('doc'))return '📘';if(t.includes('sheet')||t.includes('excel'))return '📗';return '📄';}
+function normPhone(raw){
+  if(!raw)return null;
+  let d=(''+raw).replace(/[^\d]/g,'');
+  if(!d)return null;
+  if(d.length===10 && d[0]==='3') d='57'+d;      // celular Colombia
+  else if(d.length===7 || d.length===8) d='572'+d; // fijo Cali aprox
+  return d;
+}
+function localDT(d){d=d||new Date();const p=n=>(''+n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;}
+function prettyDT(s){if(!s)return '';try{const d=new Date(s);return d.toLocaleString('es-CO',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});}catch(e){return s;}}
+
+/* ============================================================
+   Mapa
+   ============================================================ */
+function initMap(){
+  map=L.map('map',{zoomControl:true}).setView(CALI.center,13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:20,attribution:'© OpenStreetMap'}).addTo(map);
+  // Capa visual WMS de lotes (contexto)
+  wmsLayer=L.tileLayer.wms(CALI.wms,{layers:CALI.lotes,format:'image/png',transparent:true,version:'1.1.0',opacity:.55});
+  wmsLayer.addTo(map);
+  markerLayer=L.layerGroup().addTo(map);
+  wfsLayer=L.layerGroup().addTo(map);
+  selectedGeoLayer=L.layerGroup().addTo(map);
+}
+function setMarker(lat,lon){
+  markerLayer.clearLayers();
+  ownMarker=L.marker([lat,lon]).addTo(markerLayer).bindPopup('📷 Ubicación de la foto');
+  map.setView([lat,lon],18);
+}
+async function fetchLotes(bounds){
+  const b=bounds||map.getBounds();
+  const sw=b.getSouthWest(),ne=b.getNorthEast();
+  const bbox=[sw.lng,sw.lat,ne.lng,ne.lat].join(',')+',EPSG:4326';
+  const url=`${CALI.ows}?service=WFS&version=2.0.0&request=GetFeature&typeNames=${encodeURIComponent(CALI.lotes)}`+
+            `&outputFormat=application/json&srsName=EPSG:4326&count=1500&bbox=${encodeURIComponent(bbox)}`;
+  $('lotHint').innerHTML='<span class="spin"></span> Buscando lotes del catastro…';
+  try{
+    const r=await fetch(url);
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const gj=await r.json();
+    renderLotes(gj);
+    $('lotHint').textContent=`${gj.features.length} lotes en la zona. Haz clic en el que corresponde a la propiedad.`;
+  }catch(e){
+    console.error(e);
+    $('lotHint').innerHTML='⚠️ No se pudieron cargar los lotes del catastro (¿sin internet o servidor caído?). Puedes seleccionar igual haciendo clic en el mapa. <a href="#" id="retry">Reintentar</a>';
+    const rt=$('retry'); if(rt) rt.onclick=ev=>{ev.preventDefault();fetchLotes();};
+  }
+}
+function renderLotes(gj){
+  wfsLayer.clearLayers();
+  L.geoJSON(gj,{
+    style:{color:'#3aa0ff',weight:1,fillColor:'#3aa0ff',fillOpacity:.06},
+    onEachFeature:(f,layer)=>{
+      layer.on('mouseover',()=>layer.setStyle({fillOpacity:.28,weight:2}));
+      layer.on('mouseout',()=>layer.setStyle({fillOpacity:.06,weight:1}));
+      layer.on('click',()=>selectLot(f,layer));
+    }
+  }).addTo(wfsLayer);
+}
+function selectLot(feature,layer){
+  const p=feature.properties||{};
+  current.predio={
+    npn:p.npn||'', direccion:p.direpred||'', barrio:p.nom_barrio||'', comuna:p.comuna||'',
+    manzana:p.manzana||'', terreno:p.terreno||'', destinacion:p.destinacio||'',
+    codigo:p.codigo_dan||'', numepred:p.numepred||'',
+    geometry:feature.geometry, props:p
+  };
+  drawSelected();
+  renderSelectedLot();
+  toast('Lote seleccionado');
+}
+function drawSelected(){
+  selectedGeoLayer.clearLayers();
+  if(current&&current.predio&&current.predio.geometry){
+    const gl=L.geoJSON({type:'Feature',geometry:current.predio.geometry},
+      {style:{color:'#2f9e6e',weight:3,fillColor:'#2f9e6e',fillOpacity:.35}}).addTo(selectedGeoLayer);
+    try{map.fitBounds(gl.getBounds(),{maxZoom:19,padding:[40,40]});}catch(e){}
+  }
+}
+function renderSelectedLot(){
+  const el=$('selectedLot');
+  const p=current&&current.predio;
+  if(!p||!p.npn&&!p.geometry){el.classList.add('hidden');return;}
+  el.classList.remove('hidden');
+  el.innerHTML=`
+    <div style="font-weight:650;margin-bottom:6px">✅ Lote seleccionado</div>
+    <div class="kv">
+      <div class="k">NPN</div><div class="v npn">${p.npn||'—'}</div>
+      <div class="k">Dirección</div><div class="v">${p.direccion||'—'}</div>
+      <div class="k">Barrio</div><div class="v">${p.barrio||'—'} ${p.comuna?'(Comuna '+p.comuna+')':''}</div>
+      <div class="k">Manzana/Terreno</div><div class="v">${p.manzana||'—'} / ${p.terreno||'—'}</div>
+      <div class="k">Destinación</div><div class="v">${p.destinacion||'—'}</div>
+    </div>`;
+}
+
+/* ============================================================
+   Foto: EXIF, GPS, número de imagen
+   ============================================================ */
+async function handlePhoto(file){
+  if(!file)return;
+  const rec=await fileToBlobRecord(file);
+  current.foto=rec;
+  showPhoto(rec);
+  // número de imagen desde el nombre del archivo (secuencia de dígitos más larga)
+  const digits=(file.name.match(/\d+/g)||[]).sort((a,b)=>b.length-a.length)[0];
+  if(digits && !$('fNum').value) $('fNum').value=digits;
+  // EXIF
+  $('gpsStatus').innerHTML='<span class="pill"><span class="spin"></span> Leyendo metadatos…</span>';
+  try{
+    const meta=await exifr.parse(file,{gps:true}).catch(()=>null);
+    const gps=await exifr.gps(file).catch(()=>null);
+    const dt=meta&&(meta.DateTimeOriginal||meta.CreateDate||meta.ModifyDate);
+    if(dt){try{$('fDate').value=new Date(dt).toLocaleString('es-CO');}catch(e){}}
+    if(gps&&gps.latitude){
+      $('fLat').value=gps.latitude.toFixed(7);
+      $('fLon').value=gps.longitude.toFixed(7);
+      current.coords={lat:gps.latitude,lon:gps.longitude,source:'exif'};
+      $('gpsStatus').innerHTML='<span class="pill ok">📍 Coordenadas GPS detectadas en la foto</span>';
+      setMarker(gps.latitude,gps.longitude);
+      fetchLotes();
+    }else{
+      $('gpsStatus').innerHTML='<span class="pill no">⚠️ La foto no tiene GPS. Escribe la ubicación o haz clic en el mapa.</span>';
+    }
+  }catch(e){
+    console.error(e);
+    $('gpsStatus').innerHTML='<span class="pill no">⚠️ No se pudieron leer metadatos.</span>';
+  }
+}
+function showPhoto(rec){
+  const url=recToURL(rec);
+  const v=$('photoView');
+  v.innerHTML=`<img src="${url}" alt="foto"><button class="btn sm ghost" style="position:absolute;top:8px;right:8px" onclick="clearPhoto()">✕ Cambiar</button>`;
+  v.classList.remove('hidden');
+  $('drop').classList.add('hidden');
+}
+function clearPhoto(){current.foto=null;$('photoView').classList.add('hidden');$('photoView').innerHTML='';$('drop').classList.remove('hidden');}
+
+/* OCR opcional para leer un número visible dentro de la foto */
+async function runOCR(){
+  if(!current.foto){toast('Primero sube una foto');return;}
+  const btn=$('btnOcr');const old=btn.innerHTML;btn.innerHTML='<span class="spin"></span> Cargando OCR…';btn.disabled=true;
+  try{
+    if(!window.Tesseract){
+      await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});
+    }
+    btn.innerHTML='<span class="spin"></span> Leyendo imagen…';
+    const url=recToURL(current.foto);
+    const {data}=await Tesseract.recognize(url,'eng',{tessedit_char_whitelist:'0123456789'});
+    const nums=(data.text.match(/\d{2,}/g)||[]).sort((a,b)=>b.length-a.length);
+    if(nums.length){$('fNum').value=nums[0];toast('Número detectado: '+nums[0]);}
+    else toast('No se detectó ningún número claro en la foto');
+  }catch(e){console.error(e);toast('OCR no disponible (revisa tu conexión)');}
+  finally{btn.innerHTML=old;btn.disabled=false;}
+}
+
+/* ============================================================
+   WhatsApp
+   ============================================================ */
+function updateWa(){
+  const d=normPhone($('dTel').value);
+  const hint=$('waHint');const btn=$('btnWa');
+  if(d){hint.innerHTML=`Se abrirá el chat con <b>+${d}</b> en WhatsApp.`;btn.disabled=false;}
+  else{hint.textContent='Escribe un número para habilitar WhatsApp.';btn.disabled=true;}
+}
+function openWa(){
+  const d=normPhone($('dTel').value);
+  if(!d){toast('Número inválido');return;}
+  let msg='';
+  const p=current&&current.predio;
+  if(p&&p.direccion) msg='Hola, le escribo por la propiedad en '+p.direccion;
+  const url='https://wa.me/'+d+(msg?('?text='+encodeURIComponent(msg)):'');
+  window.open(url,'_blank');
+}
+
+/* ============================================================
+   CRM comunicaciones
+   ============================================================ */
+function addComm(){
+  const txt=$('cText').value.trim();
+  if(!txt){toast('Escribe el detalle de la comunicación');return;}
+  current.comunicaciones=current.comunicaciones||[];
+  current.comunicaciones.unshift({id:uid(),tipo:$('cType').value,fecha:$('cDate').value||localDT(),nota:txt});
+  $('cText').value='';$('cDate').value=localDT();
+  renderComms();
+  toast('Comunicación registrada');
+}
+function renderComms(){
+  const list=current.comunicaciones||[];
+  $('commCount').textContent=list.length?list.length+' registro(s)':'';
+  $('commList').innerHTML=list.length?list.map(c=>`
+    <div class="comm">
+      <div class="top">
+        <span class="type ${c.tipo}">${labelTipo(c.tipo)}</span>
+        <span class="date">${prettyDT(c.fecha)}</span>
+      </div>
+      <div class="txt">${escapeHtml(c.nota)}</div>
+      <div style="margin-top:6px"><button class="btn sm danger" onclick="delComm('${c.id}')">Eliminar</button></div>
+    </div>`).join(''):'<div class="muted" style="font-size:13px">Aún no hay comunicaciones registradas.</div>';
+}
+function labelTipo(t){return {llamada:'📞 Llamada',whatsapp:'💚 WhatsApp',visita:'🏠 Visita',correo:'✉️ Correo',nota:'📝 Nota'}[t]||t;}
+function delComm(id){current.comunicaciones=(current.comunicaciones||[]).filter(c=>c.id!==id);renderComms();}
+function escapeHtml(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+/* ============================================================
+   Documentos
+   ============================================================ */
+async function addDocs(files){
+  current.documentos=current.documentos||[];
+  for(const f of files){
+    const rec=await fileToBlobRecord(f);
+    current.documentos.push({id:uid(),categoria:$('docCat').value,...rec});
+  }
+  renderDocs();
+  toast(files.length+' documento(s) agregado(s)');
+}
+function renderDocs(){
+  const list=current.documentos||[];
+  $('docCount').textContent=list.length?list.length+' archivo(s)':'';
+  $('docList').innerHTML=list.length?list.map(d=>`
+    <div class="doc">
+      <div class="ic">${docIcon(d.type)}</div>
+      <div class="info"><div class="n">${escapeHtml(d.name)}</div><div class="m">${d.categoria} · ${fmtBytes(d.size)}</div></div>
+      <button class="btn sm ghost" onclick="openDoc('${d.id}')">Ver</button>
+      <button class="btn sm danger" onclick="delDoc('${d.id}')">✕</button>
+    </div>`).join(''):'<div class="muted" style="font-size:13px">Sin documentos. Sube el predial u otros.</div>';
+}
+function openDoc(id){const d=(current.documentos||[]).find(x=>x.id===id);if(!d)return;const url=recToURL(d);window.open(url,'_blank');}
+function delDoc(id){current.documentos=(current.documentos||[]).filter(d=>d.id!==id);renderDocs();}
+
+/* ============================================================
+   Editor: cargar / nuevo / guardar / borrar
+   ============================================================ */
+function newLote(){
+  current={id:uid(),createdAt:Date.now(),coords:null,foto:null,predio:null,
+           dueno:{},comunicaciones:[],documentos:[]};
+  openEditor();
+}
+function openEditor(){
+  $('welcome').classList.add('hidden');
+  $('editor').classList.remove('hidden');
+  // foto
+  if(current.foto)showPhoto(current.foto);else clearPhoto();
+  $('fNum').value=current.numeroImagen||'';
+  $('fDate').value=current.fotoFecha||'';
+  $('fLat').value=current.coords?current.coords.lat:'';
+  $('fLon').value=current.coords?current.coords.lon:'';
+  $('gpsStatus').innerHTML=current.coords?'<span class="pill ok">📍 Coordenadas guardadas</span>':'';
+  // dueño
+  const d=current.dueno||{};
+  $('dNombre').value=d.nombre||'';$('dCorreo').value=d.correo||'';$('dTel').value=d.telefono||'';$('dNotas').value=d.notas||'';
+  updateWa();
+  // crm / docs
+  $('cDate').value=localDT();
+  renderComms();renderDocs();renderSelectedLot();
+  // mapa
+  setTimeout(()=>{map.invalidateSize();
+    if(current.coords){setMarker(current.coords.lat,current.coords.lon);fetchLotes();}
+    else{map.setView(CALI.center,13);}
+    drawSelected();
+  },80);
+  $('main').scrollTop=0;
+}
+function collect(){
+  current.numeroImagen=$('fNum').value.trim();
+  current.fotoFecha=$('fDate').value.trim();
+  const lat=parseFloat($('fLat').value),lon=parseFloat($('fLon').value);
+  if(!isNaN(lat)&&!isNaN(lon))current.coords={lat,lon,source:current.coords&&current.coords.source||'manual'};
+  current.dueno={nombre:$('dNombre').value.trim(),correo:$('dCorreo').value.trim(),
+                 telefono:$('dTel').value.trim(),notas:$('dNotas').value.trim()};
+}
+async function saveLote(){
+  collect();
+  await dbPut(current);
+  await refresh();
+  toast('Lote guardado ✅');
+}
+async function deleteLote(){
+  if(!confirm('¿Eliminar este lote y todos sus datos?'))return;
+  await dbDel(current.id);
+  current=null;
+  await refresh();
+  $('editor').classList.add('hidden');$('welcome').classList.remove('hidden');
+  toast('Lote eliminado');
+}
+
+/* ============================================================
+   Lista lateral
+   ============================================================ */
+async function refresh(){
+  lotes=(await dbAll()).sort((a,b)=>b.createdAt-a.createdAt);
+  $('statCount').textContent=lotes.length+' lote'+(lotes.length===1?'':'s')+' guardado'+(lotes.length===1?'':'s');
+  renderList();
+}
+function renderList(){
+  const q=($('q').value||'').toLowerCase();
+  const items=lotes.filter(l=>{
+    if(!q)return true;
+    const p=l.predio||{},d=l.dueno||{};
+    return [p.npn,p.direccion,p.barrio,d.nombre,d.telefono,l.numeroImagen].join(' ').toLowerCase().includes(q);
+  });
+  if(!items.length){$('list').innerHTML='<div class="empty">No hay lotes.<br>Crea uno desde una foto.</div>';return;}
+  $('list').innerHTML=items.map(l=>{
+    const p=l.predio||{},d=l.dueno||{};
+    const thumb=l.foto?recToURL(l.foto):null;
+    const title=p.direccion||d.nombre||(l.numeroImagen?('Imagen '+l.numeroImagen):'Lote sin dirección');
+    const sub=p.npn?('NPN '+p.npn):(l.coords?`${l.coords.lat.toFixed(4)}, ${l.coords.lon.toFixed(4)}`:'sin ubicación');
+    return `<div class="card ${current&&current.id===l.id?'active':''}" onclick="loadLote('${l.id}')">
+      ${thumb?`<img class="thumb" src="${thumb}">`:'<div class="thumb" style="display:flex;align-items:center;justify-content:center;font-size:22px">🏠</div>'}
+      <div class="meta">
+        <div class="t">${escapeHtml(title)}</div>
+        <div class="s">${escapeHtml(sub)}</div>
+        <div class="tags">
+          ${d.nombre?`<span class="tag">👤 ${escapeHtml(d.nombre.split(' ')[0])}</span>`:''}
+          ${(l.comunicaciones||[]).length?`<span class="tag">💬 ${l.comunicaciones.length}</span>`:''}
+          ${(l.documentos||[]).length?`<span class="tag">📄 ${l.documentos.length}</span>`:''}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+function loadLote(id){current=JSON.parse(JSON.stringify(lotes.find(l=>l.id===id)));
+  // JSON.parse pierde ArrayBuffers -> recuperar referencias originales
+  const orig=lotes.find(l=>l.id===id);
+  current.foto=orig.foto;current.documentos=orig.documentos;
+  if(current.predio&&orig.predio)current.predio.geometry=orig.predio.geometry;
+  openEditor();renderList();
+}
+
+/* ============================================================
+   Backup / restaurar (JSON con datos en base64)
+   ============================================================ */
+function ab2b64(ab){let bin='';const bytes=new Uint8Array(ab);const chunk=0x8000;for(let i=0;i<bytes.length;i+=chunk)bin+=String.fromCharCode.apply(null,bytes.subarray(i,i+chunk));return btoa(bin);}
+function b642ab(b64){const bin=atob(b64);const b=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)b[i]=bin.charCodeAt(i);return b.buffer;}
+async function exportAll(){
+  const data=JSON.parse(JSON.stringify(lotes,(k,v)=>v));
+  // reconstruir con base64
+  const out=lotes.map(l=>{
+    const c=JSON.parse(JSON.stringify(l,(k,v)=>k==='data'?undefined:v));
+    if(l.foto)c.foto={...l.foto,data:ab2b64(l.foto.data)};
+    if(l.documentos)c.documentos=l.documentos.map(d=>({...d,data:ab2b64(d.data)}));
+    return c;
+  });
+  const blob=new Blob([JSON.stringify(out)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='trazador_lotes_backup.json';a.click();
+  toast('Backup exportado');
+}
+async function importAll(file){
+  const txt=await file.text();const arr=JSON.parse(txt);
+  for(const l of arr){
+    if(l.foto&&typeof l.foto.data==='string')l.foto.data=b642ab(l.foto.data);
+    if(l.documentos)l.documentos.forEach(d=>{if(typeof d.data==='string')d.data=b642ab(d.data);});
+    await dbPut(l);
+  }
+  await refresh();toast('Backup restaurado');
+}
+
+/* ============================================================
+   Eventos
+   ============================================================ */
+function bindDrop(el,input,cb){
+  el.onclick=()=>input.click();
+  el.ondragover=e=>{e.preventDefault();el.classList.add('drag');};
+  el.ondragleave=()=>el.classList.remove('drag');
+  el.ondrop=e=>{e.preventDefault();el.classList.remove('drag');cb(e.dataTransfer.files);};
+}
+window.addEventListener('DOMContentLoaded',async()=>{
+  initMap();
+  map.on('click',e=>{
+    if(!current)return;
+    $('fLat').value=e.latlng.lat.toFixed(7);$('fLon').value=e.latlng.lng.toFixed(7);
+    current.coords={lat:e.latlng.lat,lon:e.latlng.lng,source:'manual'};
+    setMarker(e.latlng.lat,e.latlng.lng);
+  });
+  $('btnNew').onclick=newLote;
+  $('btnSave').onclick=saveLote;
+  $('btnDelete').onclick=deleteLote;
+  $('q').oninput=renderList;
+  $('btnAddComm').onclick=addComm;
+  $('btnOcr').onclick=runOCR;
+  $('btnWa').onclick=openWa;
+  $('dTel').oninput=updateWa;
+  $('btnRefetch').onclick=()=>fetchLotes();
+  $('btnLocate').onclick=()=>{
+    const lat=parseFloat($('fLat').value),lon=parseFloat($('fLon').value);
+    if(isNaN(lat)||isNaN(lon)){toast('Escribe latitud y longitud');return;}
+    current.coords={lat,lon,source:'manual'};setMarker(lat,lon);fetchLotes();
+  };
+  bindDrop($('drop'),$('photoInput'),files=>handlePhoto(files[0]));
+  $('photoInput').onchange=e=>handlePhoto(e.target.files[0]);
+  bindDrop($('docDrop'),$('docInput'),files=>addDocs([...files]));
+  $('docInput').onchange=e=>addDocs([...e.target.files]);
+  $('btnExport').onclick=exportAll;
+  $('btnImport').onclick=()=>$('importFile').click();
+  $('importFile').onchange=e=>{if(e.target.files[0])importAll(e.target.files[0]);};
+  await refresh();
+});
+</script>
+</body>
+</html>

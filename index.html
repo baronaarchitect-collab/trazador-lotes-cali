@@ -400,15 +400,18 @@ function renderSelectedLot(){
       <div class="k">Destinación</div><div class="v">${p.destinacion||'—'}</div>
     </div>
     <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:11px">
-      <label style="display:block;font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:5px">📧 Enviar plano DXF de la zona por correo</label>
+      <label style="display:block;font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:5px">📐 Plano de la zona con medidas reales</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:9px">
+        <button class="btn sm primary" onclick="viewPlano()">🗺️ Ver / imprimir plano</button>
+        <button class="btn sm ghost" onclick="downloadSVG()">⬇ SVG</button>
+        <button class="btn sm ghost" onclick="downloadDXF()">⬇ DXF (CAD)</button>
+      </div>
+      <label style="display:block;font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:5px">📧 Enviar el plano por correo</label>
       <div class="row" style="gap:8px">
         <input id="mailTo" placeholder="correo@destino.com" style="background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:9px;font-size:13px">
         <button class="btn wa" style="flex:none" onclick="sendMapEmail()">Enviar</button>
       </div>
-      <div style="display:flex;gap:8px;margin-top:8px">
-        <button class="btn sm ghost" onclick="downloadDXF()">⬇ Descargar DXF</button>
-        <span class="hint" id="mailStatus" style="margin:0;align-self:center"></span>
-      </div>
+      <div style="margin-top:6px"><span class="hint" id="mailStatus" style="margin:0"></span></div>
     </div>`;
 }
 
@@ -496,19 +499,129 @@ function downloadDXF(){
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=dxfFilename();a.click();
   toast('DXF descargado');
 }
+/* ---- Medidas reales (proyección a metros) ---- */
+function ringAreaPerim(ring){
+  let a=0,p=0;const n=ring.length;
+  for(let i=0;i<n-1;i++){a+=ring[i][0]*ring[i+1][1]-ring[i+1][0]*ring[i][1];p+=Math.hypot(ring[i+1][0]-ring[i][0],ring[i+1][1]-ring[i][1]);}
+  return {area:Math.abs(a)/2,perim:p};
+}
+function biggestRing(rings){let b=rings[0]||[];rings.forEach(r=>{if(r.length>b.length)b=r;});return b;}
+function esc(s){return (''+s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+
+/* ---- Plano SVG de la zona, centrado en el lote seleccionado, con medidas ---- */
+function buildSVG(){
+  const sel=current&&current.predio;
+  if(!sel||!sel.geometry){toast('Primero selecciona un lote');return null;}
+  let feats=collectFeatures();
+  if(!feats.length) feats=[{properties:sel.props||{},geometry:sel.geometry}];
+  const o=centroidLonLat(sel.geometry); const lon0=o[0],lat0=o[1];
+  const selNpn=(sel.props&&sel.props.npn)||sel.npn||'';
+  let minX=1e9,minY=1e9,maxX=-1e9,maxY=-1e9;
+  const polys=feats.map(f=>{
+    const npn=f.properties&&f.properties.npn;
+    const isSel=!!(npn&&selNpn&&npn===selNpn);
+    const rings=ringsOf(f.geometry).map(r=>r.map(p=>proj(p[0],p[1],lon0,lat0)));
+    rings.forEach(r=>r.forEach(([x,y])=>{if(x<minX)minX=x;if(x>maxX)maxX=x;if(y<minY)minY=y;if(y>maxY)maxY=y;}));
+    return {rings,isSel,props:f.properties||{}};
+  });
+  const pad=6; minX-=pad;minY-=pad;maxX+=pad;maxY+=pad;
+  const wM=Math.max(maxX-minX,1), hM=Math.max(maxY-minY,1);
+  const W=1100, scale=W/wM, H=hM*scale, BAND=120;
+  const X=x=>((x-minX)*scale), Y=y=>(H-(y-minY)*scale);
+  const totalH=H+BAND;
+  let body='';
+  // Polígonos de lotes + área de cada lote
+  polys.forEach(pl=>{
+    pl.rings.forEach((ring,idx)=>{
+      const pts=ring.map(([x,y])=>`${X(x).toFixed(1)},${Y(y).toFixed(1)}`).join(' ');
+      const style=pl.isSel
+        ? 'fill:rgba(47,158,110,.30);stroke:#c0392b;stroke-width:2.6'
+        : 'fill:#e6edf5;stroke:#3a6fb0;stroke-width:.9';
+      body+=`<polygon points="${pts}" style="${style}"/>`;
+    });
+    // etiqueta de área (m²) en el centroide del anillo mayor
+    const big=biggestRing(pl.rings);
+    if(big.length>2){
+      const {area}=ringAreaPerim(big);
+      const scrArea=area*scale*scale;
+      if(pl.isSel || scrArea>2600){
+        let cx=0,cy=0;big.forEach(([x,y])=>{cx+=x;cy+=y;});cx/=big.length;cy/=big.length;
+        body+=`<text x="${X(cx).toFixed(1)}" y="${Y(cy).toFixed(1)}" text-anchor="middle" `+
+              `style="font-size:${pl.isSel?12:9}px;fill:${pl.isSel?'#7a1f16':'#5a6b7d'};font-weight:${pl.isSel?700:400}">`+
+              `${area.toFixed(area<100?1:0)} m²</text>`;
+      }
+    }
+  });
+  // Cotas (longitud de cada lado en metros) SOLO del lote seleccionado
+  const selPl=polys.find(p=>p.isSel)||polys[0];
+  let selInfo={area:0,perim:0};
+  if(selPl){
+    const ring=biggestRing(selPl.rings);
+    selInfo=ringAreaPerim(ring);
+    for(let i=0;i<ring.length-1;i++){
+      const a=ring[i],b=ring[i+1];
+      const len=Math.hypot(b[0]-a[0],b[1]-a[1]);
+      if(len<1.2) continue;
+      const mx=(X(a[0])+X(b[0]))/2, my=(Y(a[1])+Y(b[1]))/2;
+      let ang=Math.atan2(Y(b[1])-Y(a[1]),X(b[0])-X(a[0]))*180/Math.PI;
+      if(ang>90)ang-=180; if(ang<-90)ang+=180;
+      body+=`<text x="${mx.toFixed(1)}" y="${(my-2).toFixed(1)}" text-anchor="middle" `+
+            `transform="rotate(${ang.toFixed(1)} ${mx.toFixed(1)} ${my.toFixed(1)})" `+
+            `style="font-size:11px;fill:#c0392b;font-weight:700">${len.toFixed(2)} m</text>`;
+    }
+  }
+  // Marcador de la foto
+  if(current.coords){const px=X(proj(current.coords.lon,current.coords.lat,lon0,lat0)[0]),
+    py=Y(proj(current.coords.lon,current.coords.lat,lon0,lat0)[1]);
+    body+=`<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="6" fill="#2f9e6e" stroke="#fff" stroke-width="2"/>`;}
+  // Norte
+  const nx=W-46,ny=40;
+  body+=`<g><line x1="${nx}" y1="${ny+26}" x2="${nx}" y2="${ny}" stroke="#222" stroke-width="2"/>`+
+        `<polygon points="${nx-5},${ny+6} ${nx+5},${ny+6} ${nx},${ny-4}" fill="#222"/>`+
+        `<text x="${nx}" y="${ny+40}" text-anchor="middle" style="font-size:12px;font-weight:700;fill:#222">N</text></g>`;
+  // Barra de escala (elige una longitud "bonita")
+  const targetPx=160; let mBar=targetPx/scale;
+  const nice=[1,2,5,10,20,25,50,100]; mBar=nice.reduce((a,b)=>Math.abs(b-mBar)<Math.abs(a-mBar)?b:a,100);
+  const barPx=mBar*scale, bx=24, by=H+40;
+  body+=`<g><rect x="${bx}" y="${by}" width="${barPx.toFixed(1)}" height="7" fill="#222"/>`+
+        `<text x="${bx}" y="${by-6}" style="font-size:12px;fill:#222">0</text>`+
+        `<text x="${(bx+barPx).toFixed(1)}" y="${by-6}" text-anchor="middle" style="font-size:12px;fill:#222">${mBar} m</text></g>`;
+  // Cuadro de título
+  const ty=H+34;
+  body+=`<line x1="0" y1="${H+12}" x2="${W}" y2="${H+12}" stroke="#ccc"/>`+
+        `<text x="${W-24}" y="${ty}" text-anchor="end" style="font-size:15px;font-weight:700;fill:#111">Lote ${esc(selNpn||'s/d')}</text>`+
+        `<text x="${W-24}" y="${ty+20}" text-anchor="end" style="font-size:12px;fill:#333">${esc(sel.direccion||'')}  ·  ${esc(sel.barrio||'')}${sel.comuna?' (Comuna '+esc(sel.comuna)+')':''}</text>`+
+        `<text x="${W-24}" y="${ty+38}" text-anchor="end" style="font-size:12px;fill:#333">Área: ${selInfo.area.toFixed(1)} m²   ·   Perímetro: ${selInfo.perim.toFixed(1)} m</text>`+
+        `<text x="${W-24}" y="${ty+56}" text-anchor="end" style="font-size:10px;fill:#888">Catastro de Cali · medidas aproximadas · ${new Date().toLocaleDateString('es-CO')}</text>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${totalH.toFixed(0)}" font-family="Arial, Helvetica, sans-serif">`+
+         `<rect x="0" y="0" width="${W}" height="${totalH.toFixed(0)}" fill="#ffffff"/>${body}</svg>`;
+}
+function planoName(ext){const sel=current&&current.predio;return 'plano_'+((sel&&sel.npn)||'lote').replace(/[^\w-]/g,'')+'.'+ext;}
+function viewPlano(){
+  const svg=buildSVG(); if(!svg)return;
+  const blob=new Blob([svg],{type:'image/svg+xml'});
+  window.open(URL.createObjectURL(blob),'_blank');
+}
+function downloadSVG(){
+  const svg=buildSVG(); if(!svg)return;
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([svg],{type:'image/svg+xml'}));
+  a.download=planoName('svg');a.click();toast('Plano SVG descargado');
+}
 function b64utf8(str){return btoa(unescape(encodeURIComponent(str)));}
 async function sendMapEmail(){
   const to=($('mailTo').value||'').trim();
   const st=$('mailStatus');
   if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)){st.textContent='⚠️ Correo inválido';return;}
   const dxf=buildDXF(); if(!dxf)return;
+  const svg=buildSVG();
   const sel=current.predio;
   const payload={email:to,lotId:sel.npn||'',direccion:sel.direccion||'',barrio:sel.barrio||'',
-                 comuna:sel.comuna||'',filename:dxfFilename(),dxf:b64utf8(dxf)};
+                 comuna:sel.comuna||'',filename:dxfFilename(),dxf:b64utf8(dxf),
+                 svg:svg?b64utf8(svg):'',svgname:planoName('svg')};
   const url=endpoint();
   if(!url){
-    downloadDXF();
-    st.innerHTML='ℹ️ Backend de correo no configurado. Se descargó el DXF. Configúralo en <b>⚙️ Correo</b> para enviarlo automáticamente y registrarlo en el Sheet.';
+    downloadSVG();
+    st.innerHTML='ℹ️ Backend de correo no configurado. Se descargó el plano SVG. Configúralo en <b>⚙️ Correo</b> para enviarlo automáticamente y registrarlo en el Sheet.';
     return;
   }
   st.innerHTML='<span class="spin"></span> Enviando…';
@@ -520,7 +633,7 @@ async function sendMapEmail(){
     // Reintento fire-and-forget (por si CORS bloquea la lectura de la respuesta)
     try{await fetch(url,{method:'POST',mode:'no-cors',body:JSON.stringify(payload)});
         st.innerHTML='✅ Enviado a <b>'+to+'</b> (registrado en el Sheet). Si no llega, revisa el backend.';}
-    catch(e2){downloadDXF();st.textContent='⚠️ No se pudo contactar el backend. DXF descargado como respaldo.';}
+    catch(e2){downloadSVG();st.textContent='⚠️ No se pudo contactar el backend. Plano SVG descargado como respaldo.';}
   }
 }
 

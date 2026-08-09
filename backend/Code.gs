@@ -36,20 +36,27 @@ function doPost(e) {
       data.comuna || ''
     ]);
 
-    // 2) Enviar el correo con el DXF adjunto
-    if (data.email && data.dxf) {
-      var bytes = Utilities.base64Decode(data.dxf);
-      var blob = Utilities.newBlob(bytes, 'application/octet-stream', data.filename || 'mapa.dxf');
+    // 2) Enviar el correo con el plano adjunto (SVG + DXF)
+    if (data.email && (data.svg || data.dxf)) {
+      var attachments = [];
+      if (data.svg) {
+        attachments.push(Utilities.newBlob(Utilities.base64Decode(data.svg), 'image/svg+xml', data.svgname || 'plano.svg'));
+      }
+      if (data.dxf) {
+        attachments.push(Utilities.newBlob(Utilities.base64Decode(data.dxf), 'application/octet-stream', data.filename || 'mapa.dxf'));
+      }
       MailApp.sendEmail({
         to: data.email,
         subject: 'Plano del lote ' + (data.lotId || '') + (data.direccion ? ' — ' + data.direccion : ''),
-        body: 'Hola,\n\nAdjunto el plano en formato DXF (CAD) con los lotes de la zona y el lote seleccionado resaltado.\n\n' +
+        body: 'Hola,\n\nAdjunto el plano de la zona con el lote seleccionado resaltado y sus medidas reales.\n\n' +
               'Identificador del lote (NPN): ' + (data.lotId || 's/d') + '\n' +
               'Dirección: ' + (data.direccion || '') + '\n' +
               'Barrio: ' + (data.barrio || '') + (data.comuna ? ' (Comuna ' + data.comuna + ')' : '') + '\n\n' +
-              'El archivo .dxf se abre en AutoCAD, QGIS o cualquier software CAD. En AutoCAD puedes "Guardar como" .dwg si lo necesitas.\n\n' +
+              'Adjuntos:\n' +
+              '  • plano .svg → se abre con doble clic en cualquier navegador; se puede imprimir o guardar como PDF.\n' +
+              '  • plano .dxf → para AutoCAD, QGIS o cualquier software CAD (en AutoCAD: "Guardar como" .dwg).\n\n' +
               '— Enviado desde Trazador de Lotes',
-        attachments: [blob]
+        attachments: attachments
       });
     }
 

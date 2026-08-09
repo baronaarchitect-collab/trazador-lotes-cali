@@ -26,7 +26,23 @@ el `.bat`.
 | 💚 **WhatsApp** | Detecta el número, le antepone el indicativo de Colombia (+57) y abre el chat de WhatsApp al presionar el botón. |
 | 💬 **CRM** | Registra cada comunicación con el dueño (llamada, WhatsApp, visita, correo, nota) con fecha y detalle. |
 | 📄 **Documentos** | Sube el predial, certificado de tradición, escritura, etc. Se guardan y se pueden ver/descargar. |
+| 📐 **Enviar plano DXF por correo** | Al seleccionar un lote, escribe un correo y la app genera un **plano CAD (DXF)** con los lotes de alrededor y el lote seleccionado resaltado + su identificador (NPN), lo **envía por correo** y **registra el correo + ID del lote en un Google Sheet** (una fila nueva por cada envío). Requiere el backend de Apps Script (ver `backend/SETUP.md`). Sin backend, descarga el DXF localmente. |
 | 💾 **Guardado** | Todo queda en tu navegador (IndexedDB). Botones **Backup / Restaurar** para exportar e importar una copia (`.json`). |
+
+## Envío por correo + registro en Google Sheet (opcional)
+
+La función de "Enviar plano DXF por correo" necesita un pequeño backend gratuito de **Google
+Apps Script** (se despliega una vez bajo tu cuenta de Google). Hace dos cosas: envía el DXF al
+correo indicado y agrega una fila a tu Google Sheet por cada persona que llene el formulario.
+
+- Código: [`backend/Code.gs`](backend/Code.gs)
+- Instrucciones paso a paso: [`backend/SETUP.md`](backend/SETUP.md)
+
+Cuando tengas la URL del backend (`…/exec`), pégala en la app con el botón **⚙️ Correo**.
+
+> **DWG vs DXF:** el plano se genera en **DXF**, el formato de intercambio de AutoCAD (no es
+> posible generar DWG binario desde el navegador). El `.dxf` se abre en AutoCAD, QGIS o
+> cualquier CAD, y en AutoCAD puedes "Guardar como" `.dwg` en un clic.
 
 ## Datos del catastro
 

@@ -26,7 +26,7 @@ el `.bat`.
 | 💚 **WhatsApp** | Detecta el número, le antepone el indicativo de Colombia (+57) y abre el chat de WhatsApp al presionar el botón. |
 | 💬 **CRM** | Registra cada comunicación con el dueño (llamada, WhatsApp, visita, correo, nota) con fecha y detalle. |
 | 📄 **Documentos** | Sube el predial, certificado de tradición, escritura, etc. Se guardan y se pueden ver/descargar. |
-| 📐 **Enviar plano DXF por correo** | Al seleccionar un lote, escribe un correo y la app genera un **plano CAD (DXF)** con los lotes de alrededor y el lote seleccionado resaltado + su identificador (NPN), lo **envía por correo** y **registra el correo + ID del lote en un Google Sheet** (una fila nueva por cada envío). Requiere el backend de Apps Script (ver `backend/SETUP.md`). Sin backend, descarga el DXF localmente. |
+| 📐 **Descargar y enviar plano DXF** | Al seleccionar un lote, el botón **Descargar DXF** pide un correo, **descarga** el plano CAD (DXF) y lo **envía a ese correo**. El DXF trae los lotes de alrededor, el lote resaltado con su NPN, y las **medidas reales** (longitud de cada lado + área/perímetro), a escala en metros. Cada envío **registra una fila en un Google Sheet**. El correo incluye un enlace a la herramienta de **cabida rápida con IA** (`masa.html`) con el NPN del lote. Requiere el backend de Apps Script (`backend/SETUP.md`). |
 | 💾 **Guardado** | Todo queda en tu navegador (IndexedDB). Botones **Backup / Restaurar** para exportar e importar una copia (`.json`). |
 
 ## Envío por correo + registro en Google Sheet (opcional)

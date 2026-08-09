@@ -10,7 +10,7 @@
 
 // (Opcional) Si el script NO está vinculado a un Sheet, pon aquí el ID del Sheet.
 // El ID es la parte larga de la URL:  https://docs.google.com/spreadsheets/d/<ESTE_ID>/edit
-var SHEET_ID = '1ferzQcYgBRPCcbbDiEKQx7WC0-MT5gjdkJ60pqS16MU';  // Hoja "Registros Lotes - Trazador" (ya creada)
+var SHEET_ID = '';                 // vacío = usa la hoja a la que está vinculado el script (Extensiones > Apps Script)
 var SHEET_NAME = 'Registros';
 
 function _sheet() {
